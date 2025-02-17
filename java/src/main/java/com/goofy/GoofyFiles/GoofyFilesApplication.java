@@ -16,6 +16,6 @@ public class GoofyFilesApplication {
     // Mapping de la racine pour afficher "Hello, World!"
     @GetMapping("/")
     public String helloWorld() {
-        return "Hello, World!5";
+        return "Hello, World!";
     }
 }

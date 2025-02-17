@@ -1,4 +1,4 @@
-.PHONY: build up clean compile update
+.PHONY: docker-test-perf build up clean compile update
 
 build:
 	docker-compose build
@@ -17,3 +17,7 @@ update:
 	docker-compose exec app mvn clean package -f /source/pom.xml && \
 	docker-compose exec app cp /source/target/GoofyFiles-0.0.1-SNAPSHOT.jar /app/app.jar && \
 	docker-compose restart app
+
+# Exécuter les tests de performance
+docker-test-perf:
+	docker-compose exec app mvn test -f /source/pom.xml -Dtest=ChunkingPerformanceTest
