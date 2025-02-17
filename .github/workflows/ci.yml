@@ -23,5 +23,4 @@ jobs:
           java-version: "17"
 
       - name: Build with Maven
-        working-directory: java
         run: mvn clean package -f java/pom.xml
