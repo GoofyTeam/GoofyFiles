@@ -23,4 +23,5 @@ jobs:
           java-version: "17"
 
       - name: Build with Maven
-        run: cd java && mvn clean package
+        working-directory: java
+        run: mvn clean package
