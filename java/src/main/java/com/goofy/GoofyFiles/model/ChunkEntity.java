@@ -13,7 +13,7 @@ public class ChunkEntity {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @Lob
+  @Column(columnDefinition = "bytea")
   private byte[] data;
 
   @Column(name = "hash_sha_1")
