@@ -18,27 +18,49 @@ import com.goofy.GoofyFiles.duplication.HashingAlgorithm;
 @RequestMapping("api/duplication")
 public class DuplicationController {
 
-    private final DuplicationService duplicationService;
+  private final DuplicationService duplicationService;
 
-    public DuplicationController(DuplicationService duplicationService) {
-        this.duplicationService = duplicationService;
+  public DuplicationController(DuplicationService duplicationService) {
+    this.duplicationService = duplicationService;
+  }
+
+  @PostMapping("/analyze")
+  public ResponseEntity<?> analyzeFile(
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(value = "algorithm", defaultValue = "SHA256") HashingAlgorithm algorithm) {
+    try {
+      File tempFile = File.createTempFile("upload-", "-" + file.getOriginalFilename());
+      file.transferTo(tempFile);
+
+      Map<String, Object> result = duplicationService.analyzeFile(tempFile, algorithm);
+
+      tempFile.delete();
+      return ResponseEntity.ok(result);
+    } catch (IOException e) {
+      return ResponseEntity.internalServerError()
+          .body(Map.of("error", "Échec du traitement du fichier: " + e.getMessage()));
     }
+  }
 
-    @PostMapping("/analyze")
-    public ResponseEntity<?> analyzeFile(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "algorithm", defaultValue = "SHA256") HashingAlgorithm algorithm) {
-        try {
-            File tempFile = File.createTempFile("upload-", "-" + file.getOriginalFilename());
-            file.transferTo(tempFile);
+  @PostMapping("/process")
+  public ResponseEntity<?> processFile(
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(value = "algorithm", defaultValue = "SHA256") HashingAlgorithm algorithm) {
+    try {
+      File tempFile = File.createTempFile("upload-", "-" + file.getOriginalFilename());
+      file.transferTo(tempFile);
 
-            Map<String, Object> result = duplicationService.analyzeFile(tempFile, algorithm);
+      Map<String, Object> result = duplicationService.processAndStoreFile(
+          tempFile,
+          file.getOriginalFilename(),
+          file.getSize(),
+          algorithm);
 
-            tempFile.delete();
-            return ResponseEntity.ok(result);
-        } catch (IOException e) {
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Échec du traitement du fichier: " + e.getMessage()));
-        }
+      tempFile.delete();
+      return ResponseEntity.ok(result);
+    } catch (IOException e) {
+      return ResponseEntity.internalServerError()
+          .body(Map.of("error", "Échec du traitement et de l'enregistrement du fichier: " + e.getMessage()));
     }
+  }
 }
