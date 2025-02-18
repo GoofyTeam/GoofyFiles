@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.apache.commons.codec.binary.Hex;
+import org.apache.commons.codec.digest.Blake3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -36,7 +38,7 @@ public class DuplicationService {
                       chunk.getPosition(), chunk.getData().length, hash);
         }
 
-        // Log les chunks qui apparaissent plus d'une fois
+        // Filtrer les chunks qui apparaissent plus d'une fois (vous pouvez logguer ou utiliser ce résultat)
         duplicates.entrySet().stream()
             .filter(e -> e.getValue() > 1);
 
@@ -69,8 +71,9 @@ public class DuplicationService {
                 case SHA256:
                     return Hashing.sha256().hashBytes(data).toString();
                 case BLAKE3:
-                    // return DigestUtils.sha256Hex(data);
-                    throw new UnsupportedOperationException("BLAKE3 not supported yet");
+                    // Utilisation de Apache Commons Codec pour BLAKE3
+                    byte[] hashBytes = Blake3.hash(data);
+                    return Hex.encodeHexString(hashBytes);
                 default:
                     throw new IllegalArgumentException("Algorithme de hachage non supporté: " + algorithm);
             }
