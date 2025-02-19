@@ -1,4 +1,4 @@
-.PHONY: docker-test-perf build up clean compile update test
+.PHONY: docker-test-perf build up clean compile update test test-duplicate
 
 build:
 	docker-compose build
@@ -21,6 +21,9 @@ update:
 # Exécuter les tests de performance
 docker-test-perf:
 	docker-compose exec app mvn test -f /source/pom.xml -Dtest=ChunkingPerformanceTest
+
+test-duplicate:
+	docker-compose exec app mvn test -f /source/pom.xml -Dtest=DuplicationPerformanceTest
 
 test:
 	docker-compose exec app mvn test -f /source/pom.xml
