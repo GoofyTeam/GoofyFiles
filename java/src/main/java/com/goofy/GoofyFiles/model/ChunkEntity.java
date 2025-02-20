@@ -19,6 +19,7 @@ public class ChunkEntity {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
+  // @Lob
   @Column(columnDefinition = "bytea")
   private byte[] data;
 
@@ -39,6 +40,9 @@ public class ChunkEntity {
 
   @Column(name = "compression_type")
   private String compressionType;
+
+  @Column(name = "original_size")
+  private Integer originalSize;
 
   // Getters and setters
   public Long getId() {
@@ -95,5 +99,13 @@ public class ChunkEntity {
 
   public void setCompressionType(String compressionType) {
     this.compressionType = compressionType;
+  }
+
+  public Integer getOriginalSize() {
+    return originalSize;
+  }
+
+  public void setOriginalSize(Integer originalSize) {
+    this.originalSize = originalSize;
   }
 }
