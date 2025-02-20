@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.goofy.GoofyFiles.compression.CompressionService;
 import com.goofy.GoofyFiles.duplication.DuplicationService;
 import com.goofy.GoofyFiles.duplication.HashingAlgorithm;
 
@@ -61,6 +62,30 @@ public class DuplicationController {
     } catch (IOException e) {
       return ResponseEntity.internalServerError()
           .body(Map.of("error", "Échec du traitement et de l'enregistrement du fichier: " + e.getMessage()));
+    }
+  }
+
+  @PostMapping("/process-compressed")
+  public ResponseEntity<?> processFileCompressed(
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(value = "algorithm", defaultValue = "SHA256") HashingAlgorithm algorithm,
+      @RequestParam(value = "compression", defaultValue = "LZ4") CompressionService.CompressionType compression) {
+    try {
+      File tempFile = File.createTempFile("upload-", "-" + file.getOriginalFilename());
+      file.transferTo(tempFile);
+
+      Map<String, Object> result = duplicationService.processAndStoreFileCompressed(
+          tempFile,
+          file.getOriginalFilename(),
+          file.getSize(),
+          algorithm,
+          compression);
+
+      tempFile.delete();
+      return ResponseEntity.ok(result);
+    } catch (IOException e) {
+      return ResponseEntity.internalServerError()
+          .body(Map.of("error", "Échec du traitement et de l'enregistrement du fichier compressé: " + e.getMessage()));
     }
   }
 }

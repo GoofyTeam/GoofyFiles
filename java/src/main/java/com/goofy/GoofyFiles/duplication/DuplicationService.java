@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.goofy.GoofyFiles.chunking.Chunk;
 import com.goofy.GoofyFiles.chunking.ChunkingService;
+import com.goofy.GoofyFiles.compression.CompressionService;
+import com.goofy.GoofyFiles.compression.CompressionService.CompressionType;
 import com.goofy.GoofyFiles.model.ChunkEntity;
 import com.goofy.GoofyFiles.model.FileChunkEntity;
 import com.goofy.GoofyFiles.model.FileEntity;
@@ -35,6 +37,7 @@ public class DuplicationService {
   private final FileRepository fileRepository;
   private final ChunkRepository chunkRepository;
   private final FileChunkRepository fileChunkRepository;
+  private final CompressionService compressionService;
 
   /**
    * Constructeur principal pour l'utilisation en production
@@ -44,11 +47,13 @@ public class DuplicationService {
       ChunkingService chunkingService,
       FileRepository fileRepository,
       ChunkRepository chunkRepository,
-      FileChunkRepository fileChunkRepository) {
+      FileChunkRepository fileChunkRepository,
+      CompressionService compressionService) {
     this.chunkingService = chunkingService;
     this.fileRepository = fileRepository;
     this.chunkRepository = chunkRepository;
     this.fileChunkRepository = fileChunkRepository;
+    this.compressionService = compressionService;
   }
 
   /**
@@ -57,10 +62,7 @@ public class DuplicationService {
    * pas disponibles
    */
   public DuplicationService(ChunkingService chunkingService) {
-    this.chunkingService = chunkingService;
-    this.fileRepository = null;
-    this.chunkRepository = null;
-    this.fileChunkRepository = null;
+    this(chunkingService, null, null, null, null);
   }
 
   public Map<String, Object> analyzeFile(File file, HashingAlgorithm algorithm) throws IOException {
@@ -74,8 +76,6 @@ public class DuplicationService {
           chunk.getPosition(), chunk.getData().length, hash);
     }
 
-    // Filtrer les chunks qui apparaissent plus d'une fois (vous pouvez logguer ou
-    // utiliser ce résultat)
     duplicates.entrySet().stream()
         .filter(e -> e.getValue() > 1);
 
@@ -106,7 +106,6 @@ public class DuplicationService {
         case SHA256:
           return Hashing.sha256().hashBytes(data).toString();
         case BLAKE3:
-          // Utilisation de Apache Commons Codec pour BLAKE3
           byte[] hashBytes = Blake3.hash(data);
           return Hex.encodeHexString(hashBytes);
         default:
@@ -174,7 +173,6 @@ public class DuplicationService {
           existingChunk = Optional.empty();
       }
 
-      // Traiter le chunk (nouveau ou existant)
       ChunkEntity chunkEntity;
       if (existingChunk.isPresent()) {
         chunkEntity = existingChunk.get();
@@ -225,6 +223,130 @@ public class DuplicationService {
 
     logger.info("Fichier traité: id={}, nom={}, chunks={}, uniques={}, doublons={}",
         fileEntity.getId(), fileName, totalChunks, uniqueChunks, duplicateChunks);
+
+    return result;
+  }
+
+  @Transactional
+  public Map<String, Object> processAndStoreFileCompressed(
+      File file,
+      String fileName,
+      long fileSize,
+      HashingAlgorithm algorithm,
+      CompressionType compressionType) throws IOException {
+    if (fileRepository == null || chunkRepository == null || fileChunkRepository == null
+        || compressionService == null) {
+      throw new UnsupportedOperationException(
+          "Cette méthode nécessite les repositories et le service de compression qui n'ont pas été injectés. " +
+              "Utilisez le constructeur avec tous les paramètres pour cette fonctionnalité.");
+    }
+
+    // 1. Extraire le nom et l'extension
+    String name = fileName;
+    String extension = "";
+    int lastDotIndex = fileName.lastIndexOf('.');
+    if (lastDotIndex > 0) {
+      name = fileName.substring(0, lastDotIndex);
+      extension = fileName.substring(lastDotIndex + 1);
+    }
+
+    // 2. Créer et sauvegarder l'entité de fichier
+    FileEntity fileEntity = new FileEntity();
+    fileEntity.setName(name);
+    fileEntity.setExtension(extension);
+    fileEntity.setSize(fileSize);
+    fileEntity = fileRepository.save(fileEntity);
+
+    // 3. Découper le fichier
+    List<Chunk> chunks = chunkingService.chunkFile(file);
+
+    // Statistiques pour le résultat
+    int totalChunks = chunks.size();
+    int duplicateChunks = 0;
+    int uniqueChunks = 0;
+    long savedStorage = 0;
+    long totalCompressedSize = 0;
+
+    // 4. Traiter chaque chunk
+    for (Chunk chunk : chunks) {
+      String hash = calculateHash(chunk.getData(), algorithm);
+
+      // Chercher si ce chunk existe déjà en base
+      Optional<ChunkEntity> existingChunk;
+      switch (algorithm) {
+        case SHA1:
+          existingChunk = chunkRepository.findByHashSha1(hash);
+          break;
+        case SHA256:
+          existingChunk = chunkRepository.findByHashSha256(hash);
+          break;
+        case BLAKE3:
+          existingChunk = chunkRepository.findByHashBlake3(hash);
+          break;
+        default:
+          existingChunk = Optional.empty();
+      }
+
+      ChunkEntity chunkEntity;
+      if (existingChunk.isPresent()) {
+        chunkEntity = existingChunk.get();
+        duplicateChunks++;
+        savedStorage += chunk.getOriginalSize();
+        logger.info("Chunk dupliqué trouvé: {}", hash);
+      } else {
+        // Compression du chunk
+        byte[] compressedData = compressionService.compress(chunk.getData(), compressionType);
+        totalCompressedSize += compressedData.length;
+
+        chunkEntity = new ChunkEntity();
+        // Stocker les données compressées
+        chunkEntity.setData(compressedData);
+        // Vous pouvez ajouter une propriété pour stocker la taille originale si besoin,
+        // ex :
+        // chunkEntity.setOriginalSize(chunk.getData().length);
+
+        // Stocker le hash selon l'algorithme
+        switch (algorithm) {
+          case SHA1:
+            chunkEntity.setHashSha1(hash);
+            break;
+          case SHA256:
+            chunkEntity.setHashSha256(hash);
+            break;
+          case BLAKE3:
+            chunkEntity.setHashBlake3(hash);
+            break;
+        }
+
+        chunkEntity = chunkRepository.save(chunkEntity);
+        uniqueChunks++;
+      }
+
+      // Créer la relation entre le fichier et le chunk
+      FileChunkEntity fileChunk = new FileChunkEntity();
+      fileChunk.setFile(fileEntity);
+      fileChunk.setChunk(chunkEntity);
+      fileChunk.setPosition(chunk.getPosition());
+      fileChunkRepository.save(fileChunk);
+    }
+
+    // 5. Préparer le résultat
+    Map<String, Object> result = new HashMap<>();
+    result.put("fileId", fileEntity.getId());
+    result.put("fileName", fileEntity.getName());
+    result.put("extension", fileEntity.getExtension());
+    result.put("fileSize", fileEntity.getSize());
+    result.put("algorithm", algorithm.name());
+    result.put("compressionType", compressionType.name());
+    result.put("totalChunks", totalChunks);
+    result.put("uniqueChunks", uniqueChunks);
+    result.put("duplicateChunks", duplicateChunks);
+    result.put("savedStorage", savedStorage);
+    result.put("deduplicationRatio", totalChunks > 0 ? (double) duplicateChunks / totalChunks : 0);
+    result.put("totalCompressedSize", totalCompressedSize);
+
+    logger.info("Fichier compressé traité: id={}, nom={}, chunks={}, uniques={}, doublons={}, taille compressée={}",
+        fileEntity.getId(), fileName, totalChunks, uniqueChunks, duplicateChunks, totalCompressedSize);
 
     return result;
   }
