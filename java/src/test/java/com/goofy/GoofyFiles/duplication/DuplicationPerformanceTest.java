@@ -143,6 +143,9 @@ class DuplicationPerformanceTest {
         assertNotNull(result.get("duplicateChunks"));
         assertNotNull(result.get("totalCompressedSize"));
 
+        // Nouvelle assertion pour la méthode de compression
+        assertEquals(CompressionService.CompressionType.LZ4.name(), result.get("compressionType"));
+
         // Vérifier que la taille compressée totale est inférieure à la somme des
         // tailles originales
         List<Chunk> chunks = chunkingService.chunkFile(testFile);

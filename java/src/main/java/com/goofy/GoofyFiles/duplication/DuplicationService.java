@@ -303,7 +303,7 @@ public class DuplicationService {
         chunkEntity.setData(compressedData);
         // Vous pouvez ajouter une propriété pour stocker la taille originale si besoin,
         // ex :
-        // chunkEntity.setOriginalSize(chunk.getData().length);
+        chunkEntity.setCompressionType(compressionType.name());
 
         // Stocker le hash selon l'algorithme
         switch (algorithm) {
