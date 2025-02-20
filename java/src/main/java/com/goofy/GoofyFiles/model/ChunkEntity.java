@@ -4,7 +4,13 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "chunk")
@@ -30,6 +36,9 @@ public class ChunkEntity {
 
   @OneToMany(mappedBy = "chunk")
   private List<FileChunkEntity> fileChunks = new ArrayList<>();
+
+  @Column(name = "compression_type")
+  private String compressionType;
 
   // Getters and setters
   public Long getId() {
@@ -78,5 +87,13 @@ public class ChunkEntity {
 
   public List<FileChunkEntity> getFileChunks() {
     return fileChunks;
+  }
+
+  public String getCompressionType() {
+    return compressionType;
+  }
+
+  public void setCompressionType(String compressionType) {
+    this.compressionType = compressionType;
   }
 }
